@@ -1,6 +1,6 @@
 # hg_1k_experiment
 
-This is a supplementary code for the k-mer counting experiment on a very large input: 232 sets of raw DNA reads from 1000 genomes project. Counting of k-mers is performed using <a href="">streamcount</a>. 
+This is a supplementary code for the k-mer counting experiment on a very large input: 232 sets of raw DNA reads from 1000 genomes project. Counting of k-mers is performed using <a href="https://github.com/mgbarsky/streamcount">streamcount</a>. 
 
 The resulting counts of a pre-selected set of k-mers are used for alignment-free inference of human population structure. 
 The experiment consists of two parts:
