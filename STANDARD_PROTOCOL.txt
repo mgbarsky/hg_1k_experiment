@@ -1,0 +1,263 @@
+====================
+1. Extracting biallelic SNPs from human VCF file
+================================================================
+
+Run perl_scripts/extract_quality_snips.pl on all SNPs per chromosome from phase1_release_v3
+Input vcf files are downloaded from ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/
+
+
+sh script for all chromosomes is in 
+sh_scripts/extract_all_quality_snips.sh
+
+These extract only biallelic snps with VT (variant type) = SNP and with AF (allele frequency) between 5 and 95 %
+
+The output: sets of high quality snps per chromosome in csv format
+Format:
+Chromosome #, position in ref genome, Ref char, Alt char, AF
+for example:
+1,10583,G,A,0.14,0|0:0.200:-0.18,-0.47,-2.42,0|0:0.150:-0.24,-0.44
+
+Followed by comma-separated info per sample
+for example:
+0|0:0.200:-0.18,-0.47,-2.42
+
+here of interest to us is only the first 2 values: 
+0|0 means homozygote of type reference REF/REF
+0|1 heterozygote REF / ALT
+1|1 homozygote of type ALT/ALT
+
+==============================
+2. Extracting only information about snps per sample
+===============================================
+
+perl_scripts/sample_snps.pl
+
+This creates one csv file per chromosome in the following format:
+0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0,0/0...
+1/1,0/1,0/0,1/0,0/0,1/0,0/0,0/1,1/0,0/0...
+
+each column represents a sample, in the order defined in SAMPLE_KEYS_FULL.txt
+
+The file SAMPLE_KEYS_FULL.txt was in turn created from the headers of the original VCF files, 
+and verified to contain the same sample names for each chromosome
+
+These csv files are then combined into a single csv file, by appending rows of variants from all chromosomes:
+This file is:
+ALL_QUALITY_SNIPS.csv
+
+=============================
+3. Subset of 232 samples from Broad Institute
+===============
+
+in FILE_NAMES_232_BI.txt  we have names of 232 samples from Broad institute
+
+in file FILE_LABELS_232_BI.csv we have continent labels for these selected samples
+
+To extract only columns corresponding to these selected samples run:
+perl_scripts/snipstopedencoding_selectedsample.pl
+
+perl perl_scripts/snipstopedencoding_selectedsample.pl --snips ALL_QUALITY_SNIPS.csv --columns SAMPLE_KEYS_FULL.txt --labels FILE_LABELS_232_BI.csv
+
+In this script, the variants are selected by the following criteria:
+Variability in least 10% of samples (have a snp in at least 23 samples)
+the result is
+Total valid variants 91729 and 232 samples.
+
+The output is a file in ped format - ready to be processed by an admixture program:
+BI_232_samples.ped
+
+In ped format we have:
+#6 first columns of ped format. Delimiter - space
+#   0 - Family ID - $labelBySample{$key}
+#   1 - Sample ID - $key 
+#    Paternal ID - 0 unknown
+#    Maternal ID - 0 unlnown
+#    Sex (1=male; 2=female; other=unknown) 0 - unlnown
+#    Affection (0=unknown; 1=unaffected; 2=affected) 0 unknown
+ #   Genotypes (space or tab separated, 2 for each marker. 0=missing) - 1 1 if ref char, 2 2 - if both alt chars, 1 2 otherwise
+
+To convert a ped format to a simple matrix for PCA we run
+/perl_scripts/pedtomatrix.pl
+
+The output file:
+BI_232_samples_matrix.csv
+
+this matrix has the following format:
+alt/alt - 2
+ref/ref - 0
+ref/alt - 1
+
+=============================================
+4. Subset of 232 samples with snps from 30 samples
+======================================
+Here we want to test how we can study 232 samples if we only would have snps from 30 samples
+
+we run the same perl script for selecting snps with 10% variance from 30 samples (variance in at least 3 samples)
+The samples are in:
+FILE_LABELS_30.csv
+
+perl perl_scripts/snipstopedencoding_selectedsample.pl --snips ALL_QUALITY_SNIPS.csv --columns SAMPLE_KEYS_FULL.txt --labels FILE_LABELS_30.csv
+This will produce also the file with line numbers (each line represents a snp)
+
+Then we select 232 samples and snps according to these selected lines, obtained from 30 samples:
+perl perl_scripts/snipstoped_selectedlines.pl --snips ALL_QUALITY_SNIPS.csv --columns SAMPLE_KEYS_FULL.txt --labels FILE_LABELS_232.csv --lines FILE_LABELS_30.csv.selected_lines.txt
+
+This produced file:
+BI_232_samples_30_markers.ped
+
+and the matrix file:
+BI_232_samples_30_markers_matrix.csv
+
+
+
+as a result we have the following inputs for Admixture program:
+BI_232_samples.ped
+BI_232_samples_30_markers.ped
+
+and the following inputs for PCA:
+BI_232_samples_matrix.csv
+BI_232_samples_30_markers_matrix.csv
+
+
+========================================
+5. Running admixture for both input files
+=====================================
+for K in 2 3 4; 
+do ./admixture --cv BI_232_samples.ped $K | tee log${K}.out; 
+done
+
+grep -h CV log*.out
+CV error (K=2): 0.52776
+CV error (K=3): 0.50540
+CV error (K=4): 0.50757
+
+
+for K in 2 3 4; 
+do ./admixture --cv BI_232_samples_30_markers.ped $K | tee log${K}.out; 
+done
+
+grep -h CV log*.out
+CV error (K=2): 0.53252
+CV error (K=3): 0.50998
+CV error (K=4): 0.51192
+
+The resulting files of admixture are:
+BI_232_samples.2.Q
+BI_232_samples.3.Q
+BI_232_samples.4.Q
+
+BI_232_samples_30_markers.2.Q
+BI_232_samples_30_markers.3.Q
+BI_232_samples_30_markers.4.Q
+
+We paste 2 first columns: sample id and label
+paste FILE_LABELS_232_TAB.txt BI_232_samples_30_markers.2.Q > BI_232_samples_30_markers_2_result.txt
+We sort them by label, and then by sample id
+
+This produces the following final set of files for visualizations:
+BI_232_samples_k_2_result.txt
+BI_232_samples_k_3_result.txt
+BI_232_samples_k_4_result.txt
+
+BI_232_samples_30_markers_2_result.txt
+BI_232_samples_30_markers_3_result.txt
+BI_232_samples_30_markers_4_result.txt
+
+
+All final tables are in folder TABLES, including 2 PCA input matrices
+BI_232_samples_matrix.csv
+BI_232_samples_30_markers_matrix.csv
+
+=================================
+6. Creating 2-PC visualization
+================================
+
+Rscript R_scripts/PCA_SNIPS.R "TABLES/BI_232_samples_matrix.csv"
+
+Rscript R_scripts/PCA_SNIPS.R "TABLES/BI_232_samples_30_markers_matrix.csv"
+
+
+====================
+7. Visualization of admixture results
+====================
+(by class labels)
+
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_k_2_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_k_3_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_k_4_result.txt"
+
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_30_markers_2_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_30_markers_3_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_samples_30_markers_4_result.txt"
+
+
+===========================
+8. Fuzzy clusters comparison
+========================
+
+To compare clustering numerically we write a perl program
+for comparing fuzzy clusters, based on the idea in this paper:
+G.J. Torres, R.B. Basnet, A.H. Sung, S. Mukkamala, B.M. Ribeiro
+A similarity measure for clustering and its applications
+Proceedings of World Academy of Science, Engineering and Technology, 31 (2008), pp. 490–496
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_samples_k_2_result.txt --file2 TABLES/BI_232_samples_30_markers_2_result.txt
+0.997
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_samples_k_3_result.txt --file2 TABLES/BI_232_samples_30_markers_3_result.txt
+0.997
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_samples_k_4_result.txt --file2 TABLES/BI_232_samples_30_markers_4_result.txt
+0.995
+
+==========================
+9. Congruence of distance matrices
+=========================
+Create distance matrices from matrix files
+Distance is P-distance
+
+perl perl_scripts/distances_p.pl --t TABLES/BI_232_samples_matrix.csv
+
+perl perl_scripts/distances_p.pl --t TABLES/BI_232_samples_30_markers_matrix.csv
+
+
+install.packages("ape")
+library ("ape")
+
+d12 <- read.table("TABLES/P-distance_snips_232_30.csv", sep=",", header=FALSE)
+
+res.global <- CADM.global(d12, 2, 232)
+res.post   <- CADM.post(d12, 2, 232,  mantel=TRUE)
+
+res.global
+res.post
+
+$congruence_analysis
+            Statistics
+W         9.988839e-01
+Chi2      5.353019e+04
+Prob.perm 1.000000e-02
+
+$A_posteriori_tests
+                  Dmat.1    Dmat.2
+Mantel.mean    0.9977679 0.9977679
+Prob           0.0100000 0.0100000
+Corrected.prob 0.0200000 0.0200000
+
+$Correction.type
+[1] "holm"
+
+$Mantel.cor
+          Dmat.1    Dmat.2
+Dmat.1 1.0000000 0.9977679
+Dmat.2 0.9977679 1.0000000
+
+$Mantel.prob
+       Dmat.1 Dmat.2
+Dmat.1     NA   0.01
+Dmat.2   0.01     NA
+
+$nperm
+[1] 99
+
+

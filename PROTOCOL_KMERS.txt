@@ -1,0 +1,224 @@
+==============================
+1. Determining which snp positions to use
+==========================================
+
+We already have high quality snps from the previous step - of working with VCF standard file
+
+These are biallelic snps with VT (variant type) = SNP and with AF (allele frequency) between 5 and 95 %
+
+The output: sets of high quality snps per chromosome in csv format
+Format:
+Chromosome #, position in ref genome, Ref char, Alt char, AF
+for example:
+1,10583,G,A,0.14,0|0:0.200:-0.18,-0.47,-2.42,0|0:0.150:-0.24,-0.44
+
+Followed by comma-separated info per sample
+for example:
+0|0:0.200:-0.18,-0.47,-2.42
+
+here of interest to us is only the first 2 values: 
+0|0 means homozygote of type reference REF/REF
+0|1 heterozygote REF / ALT
+1|1 homozygote of type ALT/ALT
+
+
+we run perl_scripts/extract_quality_snips_from30.pl on each chromosome file
+by using the following sh script:
+sh_scripts/extract_selected_quality_snips30.sh
+
+This selection is based on 30 samples that we used in the previous experiment: variance at least 10% (in at least 3 out of 30)
+
+SNPS are extracted for each chromosome separately
+
+========================
+2. Extracting context substrings around these SNP positions from reference genome
+================
+
+Now we are going to produce a set of context substrings from around snps selected in step 1
+
+For this we run perl_scripts/snipstocontext.pl for each chromosome
+by using the following sh script:
+sh_scripts/extract_context_all.sh
+
+parameters: context length 151, snps are separated by at least 300 positions
+
+combine resulting context strings into a single file
+sh_scripts/concat_rows.sh
+
+Concatenated strings from all chromosomes are now in file:
+CONTEXT_ROWS_30.txt
+
+we shuffle these lines of context substrings
+shuf CONTEXT_ROWS_30.txt > CONTEXT_ROWS_30_SHUF.txt
+
+================================
+3. Extracting snp k-mer pairs
+================================
+From these lines we extract 90,000
+snp-covering k-mers of length 31 - with ref char and alt char in the last position
+
+perl perl_scripts/contexttokmers.pl --f CONTEXT_ROWS_30_SHUF.txt --k 31 --n 90000
+
+Resulting pairs of substrings are in:
+snippairs31_ref.txt (each 2 lines contain ref genome substring and and alt char in the last position)
+
+===========================================================
+4. Counting 90,000 snip k-mers in raw reads of 232 samples
+=========================================================
+
+Raw reads were downloaded from:
+ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data/
+
+Counting performed by running streamcount (https://github.com/mgbarsky/streamcount) on cluster
+
+sh_scripts/count_snip_kmers_30.sh 
+
+================================
+5. Creating a general table of counts with sample and class labels
+====================================
+perl_scripts/generaltable.pl
+
+perl generaltable.pl --files FILE_LABELS_232_BI.csv --folder /.mounts/labs/simpsonlab/data/streamcount_paper/g1k/variants/output/snipcounts/SNIP_COUNTS31_ --ext .txt --output /.mounts/labs/simpsonlab/data/streamcount_paper/g1k/variants/output/COUNTS_TABLE_SNIP_PAIRS.csv
+
+TABLES/COUNTS_TABLE_SNIP_PAIRS.csv
+
+======================================
+6. Converting a general table of counts to ped format
+===========================================
+
+We assume that presence/absence of a k-mer indicates an allele
+no filter, treat 0/0 count as missing, remove only columns where all missing
+#Referring alleles from counts
+# ref >0, alt > 0  - 1 2
+# ref >0, alt =0   - 1 1
+#ref =0, alt >0    - 2 2
+# ref=0, alt =0 - 0 0 (undefined)
+
+perl perl_scripts/countstoped.pl --table TABLES/COUNTS_TABLE_SNIP_PAIRS.csv
+89970 valid variants
+
+rename to BI_232_snippaircounts.ped
+
+====================================
+7. converting ped format to matrix for PCA
+===================================
+perl perl_scripts/pedtomatrix.pl --ped TABLES/BI_232_snippaircounts.ped
+
+
+==============================
+8. Running admixture
+==========================
+for K in 2 3 4; 
+do ./admixture --cv BI_232_snippaircounts.ped $K | tee log${K}.out; 
+done
+
+grep -h CV log*.out
+CV error (K=2): 0.57910
+CV error (K=3): 0.56005
+CV error (K=4): 0.56122
+
+vs. vcf:
+CV error (K=2): 0.52776
+CV error (K=3): 0.50540
+CV error (K=4): 0.50757
+
+add class labels
+paste FILE_LABELS_232_TAB.txt BI_232_snippaircounts.4.Q > BI_232_snippaircounts_k_4_result.txt
+
+sort first by label then by sample id
+
+
+We now have all the input files for visualization:
+
+
+=================
+9. Visualization of 2 first PCs
+========================
+Rscript R_scripts/PCA_COUNTS.R "TABLES/BI_232_snippaircounts_matrix.csv"
+
+
+=======================
+10. Visualization of admixture results
+==========================
+
+(by class labels)
+
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_snippaircounts_k_2_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_snippaircounts_k_3_result.txt"
+Rscript R_scripts/BARPLOT_BYLABEL.R "TABLES/BI_232_snippaircounts_k_4_result.txt"
+
+
+===========================
+11. Fuzzy clusters comparison
+========================
+
+To compare clustering numerically we write a perl program
+for comparing fuzzy clusters, based on the idea in this paper:
+G.J. Torres, R.B. Basnet, A.H. Sung, S. Mukkamala, B.M. Ribeiro
+A similarity measure for clustering and its applications
+Proceedings of World Academy of Science, Engineering and Technology, 31 (2008), pp. 490–496
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_snippaircounts_k_2_result.txt --file2 TABLES/BI_232_samples_30_markers_2_result.txt
+0.958
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_snippaircounts_k_3_result.txt --file2 TABLES/BI_232_samples_30_markers_3_result.txt
+0.981
+
+perl perl_scripts/compareclusters.pl --file1 TABLES/BI_232_snippaircounts_k_4_result.txt --file2 TABLES/BI_232_samples_30_markers_4_result.txt
+cluster 0 intersection 15.4172 union 100.331127
+cluster 1 intersection 48.7538770000001 union 51.0163740000001
+cluster 2 intersection 65.9023650000004 union 66.9324720000003
+cluster 3 intersection 15.603268 union 100.04332
+Total point similarity for 4 is  2.24988960495018 and the cluster similarity measure is 0.562472401237545. 
+
+
+==========================
+12. Congruence of distance matrices
+=========================
+Create distance matrix from a matrix file
+Distance is P-distance
+
+perl perl_scripts/distances_p.pl --t TABLES/BI_232_snippaircounts_matrix.csv
+
+combine into a single table (k-mer counts and 232_vcf-from 30):
+
+
+install.packages("ape")
+library ("ape")
+
+d12 <- read.table("TABLES/P-distance_snips_232_30_counts.csv", sep=",", header=FALSE)
+
+res.global <- CADM.global(d12, 2, 232)
+res.post   <- CADM.post(d12, 2, 232,  mantel=TRUE)
+
+res.global
+$congruence_analysis
+            Statistics
+W         9.173128e-01
+Chi2      4.915880e+04
+Prob.perm 1.000000e-02
+
+$nperm
+[1] 99
+                  Dmat.1    Dmat.2
+Mantel.mean    0.8346257 0.8346257
+Prob           0.0100000 0.0100000
+Corrected.prob 0.0200000 0.0200000
+
+$Correction.type
+[1] "holm"
+
+$Mantel.cor
+          Dmat.1    Dmat.2
+Dmat.1 1.0000000 0.8346257
+Dmat.2 0.8346257 1.0000000
+
+$Mantel.prob
+       Dmat.1 Dmat.2
+Dmat.1     NA   0.01
+Dmat.2   0.01     NA
+
+res.post
+
+
+
