@@ -2,7 +2,7 @@
 <h4>See: <a href="http://projects.oicr.on.ca/visualizing-human-populations/">web tool</a>.</h4>
 
 For our web visualization tool, 
-we used results obtained in our <a href="KMER_COUNTING_EXPERIMENT.html">K-mer counting experiment</a>.
+we used results obtained in our <a href="https://github.com/mgbarsky/hg_1k_experiment/blob/master/KMER_COUNTING_EXPERIMENT.md">K-mer counting experiment</a>.
 <h2>1. Generating data for web visualization</h2>
 <ol>
 <li>First, in order to decrease memory used by the browser, 
