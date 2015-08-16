@@ -15,7 +15,7 @@ Detailed protocol for this part is in file
 population structure using differences in k-mer counts. 
 Detailed protocol for this part is in file 
 <a href="https://github.com/mgbarsky/hg_1k_experiment/blob/master/KMER_COUNTING_EXPERIMENT.md">KMER_COUNTING_EXPERIMENT.md</a></li>
-<li>Browser-based tool for visualizing human population structure, available at <a href="http://projects.oicr.on.ca/visualizing-human-populations/>OICR web site</a>.
+<li>Browser-based tool for visualizing human population structure, available at <a href="http://projects.oicr.on.ca/visualizing-human-populations">OICR web site</a>.
 The description of data experiment for this part is in file
 <a href="https://github.com/mgbarsky/hg_1k_experiment/blob/master/WEB_VISUALIZATION_EXPERIMENT.md">WEB_VISUALIZATION_EXPERIMENT.md</a></li> 
 </li>
