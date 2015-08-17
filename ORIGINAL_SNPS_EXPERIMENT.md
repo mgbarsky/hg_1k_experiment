@@ -12,7 +12,7 @@ Using <strong>perl_scripts/extract_quality_snips.pl</strong>,
 and <strong>perl_scripts/sample_snps.pl</strong> 
 we extract SNPs from the VCF file 
 published by researchers of the 1000 genomes project: 
-<a href ="ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/">VCF file</a>.
+<a href ="ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/">VCF file</a>.
 
 We extract all bi-allelic SNPs, 
 and we leave only 
